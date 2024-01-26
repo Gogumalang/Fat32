@@ -57,6 +57,11 @@ public:
       fat[i] = bb.get_uint32_le();
     }
   }
+
+  ~FatArea(){
+    delete [] fat;
+  }
+
   int entry_count;
   uint32_t *fat;
 };
@@ -64,7 +69,7 @@ public:
 class DirectoryEntry
 {
 public:
-  DirectoryEntry(uint8_t *buffer, int size, FatArea fatArea)
+  DirectoryEntry(uint8_t *buffer, int size)
   {
     byte_buffer bb(buffer, 0, size);
 
@@ -77,42 +82,16 @@ public:
 
     bb.offset(0x14);
     HighClusterNum = bb.get_uint16_le();
-    ClusterNum = HighClusterNum << 16;
-
     bb.offset(0x1A);
     LowClusterNum = bb.get_uint16_le();
-    ClusterNum = ClusterNum | LowClusterNum;
+    ClusterNum = (HighClusterNum << 16) | LowClusterNum;
     FileSize = bb.get_uint32_le();
-
-    clusters.push_back(ClusterNum);
-
-    while (fatArea.fat[ClusterNum] != 0xfffffff)
-    {
-      clusters.push_back(fatArea.fat[ClusterNum]);
-      ClusterNum++;
-    }
   }
 
-  void export_to(ifstream *file)
-  {
-    ofstream ofs(FileName, std::ios_base::binary);
-    uint32_t RestOfFile = FileSize;
-    for (uint32_t cluster : clusters)
-    {   
-      uint32_t physical_addr = 0x400000 + (cluster - 2) * 0x1000;
-      file->seekg(physical_addr);
-      char buffer[0x1000] = {0};
-      uint32_t bufferSize = (RestOfFile >= 0x1000) ? 0x1000 : RestOfFile;
-      file->read(buffer, bufferSize);
-      ofs.write(buffer, bufferSize);
-      RestOfFile -= 0x1000;
-    }
-  }
 public : 
   string FileName;
   uint32_t ClusterNum;
   uint32_t FileSize;
-  vector<uint32_t> clusters;
   uint8_t Attribute;
 
   string Name;
@@ -144,20 +123,48 @@ public:
   }
 
   void build() {
-    char buffer_leaf[0x20] = {0};
-    ifs->seekg(superblock->DataAreaOffset + 0x80);
-    ifs->read(buffer_leaf, 0x20);
-    RootDir = new DirectoryEntry((uint8_t *)buffer_leaf, 0x20, *fatarea);
+    char buffer[0x20] = {0};
+    ifs->seekg(superblock->DataAreaOffset + 0x80); //D1 으로 이동 
+    ifs->read(buffer, 0x20);
+    RootDir = new DirectoryEntry((uint8_t *)buffer, 0x20);
+  }
+
+  vector<uint32_t> set_clusters(uint32_t cluster_no, FatArea* fatArea){
+    vector<uint32_t> clusters;
+    clusters.push_back(cluster_no);
+
+    while (fatArea->fat[cluster_no] != 0xfffffff)
+    {
+      clusters.push_back(fatArea->fat[cluster_no]);
+      cluster_no++;
+    }
+
+    return clusters;
   }
 
   void export_to() {
-    uint32_t filedata_addr = superblock->DataAreaOffset + (RootDir->ClusterNum - 2) * superblock->ClusterSize + 0x40;
+    uint32_t filedata_addr = superblock->DataAreaOffset + (RootDir->ClusterNum - 2) * superblock->ClusterSize + 0x40;// leaf 파일로 이동 
     char buffer_data[0x20] = {0};
     ifs->seekg(filedata_addr);
     ifs->read(buffer_data, 0x20);
 
-    DataDir = new DirectoryEntry((uint8_t *)buffer_data, 0x20, *fatarea);
-    DataDir->export_to(ifs);
+    DataDir = new DirectoryEntry((uint8_t *)buffer_data, 0x20);
+
+    ofstream ofs(DataDir->FileName, std::ios_base::binary);
+    uint32_t RestOfFile = DataDir-> FileSize;
+    vector<uint32_t> clusters = set_clusters(DataDir->ClusterNum,fatarea);
+    for (uint32_t cluster : clusters)
+    {   
+      uint32_t physical_addr = 0x400000 + (cluster - 2) * 0x1000;
+      ifs->seekg(physical_addr);
+      char buffer[0x1000] = {0};
+
+      uint32_t bufferSize = (RestOfFile >= 0x1000) ? 0x1000 : RestOfFile;
+      ifs->read(buffer, bufferSize);
+      ofs.write(buffer, bufferSize);
+      RestOfFile -= 0x1000;
+    }
+    ofs.close();
   }
 };
 
@@ -170,7 +177,7 @@ int main(int argc, char *argv[])
   Fat32 test(&ifs);
   test.build();
   test.export_to();
-
+  ifs.close();
 
   return 0;
 }
