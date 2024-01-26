@@ -130,13 +130,16 @@ public:
   }
 
   vector<uint32_t> set_clusters(uint32_t cluster_no, FatArea* fatArea){
+
     vector<uint32_t> clusters;
     clusters.push_back(cluster_no);
 
-    while (fatArea->fat[cluster_no] != 0xfffffff)
+    uint32_t next = fatArea->fat[cluster_no];
+
+    while (next != 0xfffffff)
     {
-      clusters.push_back(fatArea->fat[cluster_no]);
-      cluster_no++;
+      clusters.push_back(next);
+      next = fatArea->fat[next];
     }
 
     return clusters;
