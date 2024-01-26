@@ -171,6 +171,24 @@ public:
   }
 };
 
+class Node{
+  Node(string nodename, string nodetype, DirectoryEntry dentry) {
+    name = nodename;
+    type = nodetype;
+    de = &dentry;
+
+  }
+public: 
+  string name;
+  string type;
+  vector<Node*> children;
+  Node* parent; 
+  DirectoryEntry* de;
+
+  uint32_t inode_no;
+  uint8_t file_mode;
+};
+
 int main(int argc, char *argv[])
 {
   ifstream ifs("FAT32_simple.mdf"s);

@@ -1,2 +1,5 @@
 debug/
 FAT32_simple.mdf
+dentry.cpp
+fatarea.cpp
+superblock.cpp
