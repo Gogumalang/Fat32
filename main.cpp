@@ -1,5 +1,6 @@
 #include <iostream>
 #include <fstream>
+#include <cstdlib>
 
 #include "byte_buffer.hpp"
 
@@ -51,7 +52,7 @@ public:
   {
     byte_buffer bb(buffer, 0, size);
     entry_count = size / 4;
-    fat = (uint32_t *)malloc(sizeof(uint32_t) * entry_count);
+    fat = new uint32_t[entry_count];
     for (int i = 0; i < entry_count; i++)
     {
       fat[i] = bb.get_uint32_le();
@@ -169,6 +170,13 @@ public:
     }
     ofs.close();
   }
+
+  ~Fat32() {
+    delete superblock;
+    delete fatarea;
+    delete RootDir;
+    delete DataDir;
+  }
 };
 
 class Node{
@@ -193,14 +201,16 @@ int main(int argc, char *argv[])
 {
   ifstream ifs("FAT32_simple.mdf"s);
 
-  if (!ifs.good())
-    cout << "error";
+  if (!ifs.good()){
+    cout << "failed to open fileerror";
+    return EXIT_FAILURE;
+  }
   Fat32 test(&ifs);
   test.build();
   test.export_to();
   ifs.close();
 
-  return 0;
+  return EXIT_SUCCESS;
 }
 
 
